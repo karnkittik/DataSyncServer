@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"DataSyncServer/database"
 	"DataSyncServer/entities"
@@ -11,26 +12,24 @@ import (
 )
 
 func main() {
-	fmt.Println("Hello World")
 	db := database.Connect()
-	rows, err := db.Query("SELECT id, username FROM my_table")
-	if err != nil {
-		panic(err)
-	}
-	defer rows.Close()
 
 	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
+	r.GET("/api/messages", get)
+	r.POST("/api/messages", post)
+	r.PUT("/api/messages/:uuid", put)
+	r.DELETE("/api/messages/:uuid", delete)
 
 	r.GET("/users", func(c *gin.Context) {
-		var users []entities.User
+		rows, err := db.Query("SELECT id, username FROM my_table")
+		if err != nil {
+			panic(err)
+		}
+		defer rows.Close()
+		var users []entities.DataRecord
 		for rows.Next() {
-			var user entities.User
-			err := rows.Scan(&user.Id, &user.Username)
+			var user entities.DataRecord
+			err := rows.Scan(&user.UUID, &user.Author)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -39,5 +38,44 @@ func main() {
 		c.JSON(200, users)
 	})
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
-	// run go run main.go and visit 0.0.0.0:8080/ping (for windows "localhost:8080/ping") on browser
+}
+
+func get(c *gin.Context) {
+	var requestDatetime entities.GetRequestBody
+	c.BindJSON(&requestDatetime)
+	fmt.Println(requestDatetime.UnixTimestamp)
+	tm := time.Unix(int64(requestDatetime.UnixTimestamp), 0).UTC()
+	fmt.Println(tm)
+}
+
+func post(c *gin.Context) {
+	var postRequestBody entities.PostRequestBody
+	c.BindJSON(&postRequestBody)
+	// on success
+	c.JSON(201, nil)
+	return
+	// if uuid already exists
+	c.JSON(409, nil)
+}
+
+func put(c *gin.Context) {
+	uuid := c.Param("uuid")
+	fmt.Println(uuid)
+	var putRequestBody entities.PutRequestBody
+	c.BindJSON(&putRequestBody)
+	// on success
+	c.JSON(204, nil)
+	return
+	// if uuid is not found
+	c.JSON(404, nil)
+}
+
+func delete(c *gin.Context) {
+	uuid := c.Param("uuid")
+	fmt.Println(uuid)
+	// on success
+	c.JSON(204, nil)
+	return
+	// if uuid is not found
+	c.JSON(404, nil)
 }
