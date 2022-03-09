@@ -2,41 +2,21 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"DataSyncServer/database"
 	"DataSyncServer/entities"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-sql-driver/mysql"
 )
 
 func main() {
-	db := database.Connect()
-
 	r := gin.Default()
 	r.GET("/api/messages", get)
 	r.POST("/api/messages", post)
 	r.PUT("/api/messages/:uuid", put)
 	r.DELETE("/api/messages/:uuid", delete)
-
-	r.GET("/users", func(c *gin.Context) {
-		rows, err := db.Query("SELECT id, username FROM my_table")
-		if err != nil {
-			panic(err)
-		}
-		defer rows.Close()
-		var users []entities.DataRecord
-		for rows.Next() {
-			var user entities.DataRecord
-			err := rows.Scan(&user.UUID, &user.Author)
-			if err != nil {
-				log.Fatal(err)
-			}
-			users = append(users, user)
-		}
-		c.JSON(200, users)
-	})
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
 
@@ -51,11 +31,30 @@ func get(c *gin.Context) {
 func post(c *gin.Context) {
 	var postRequestBody entities.PostRequestBody
 	c.BindJSON(&postRequestBody)
+	db := database.Connect()
+	defer db.Close()
+	insForm, err := db.Prepare("INSERT INTO data_record(uuid,author,message,likes,created_at) VALUES(?,?,?,?,?)")
+	if err != nil {
+		panic(err.Error())
+	}
+	tm := time.Now().UTC()
+	_, err = insForm.Exec(
+		postRequestBody.UUID,
+		postRequestBody.Author,
+		postRequestBody.Message,
+		postRequestBody.Likes,
+		tm,
+	)
+	if err != nil {
+		e, _ := err.(*mysql.MySQLError)
+		// if uuid already exists
+		if e.Number == 1062 {
+			c.JSON(409, nil)
+			return
+		}
+	}
 	// on success
 	c.JSON(201, nil)
-	return
-	// if uuid already exists
-	c.JSON(409, nil)
 }
 
 func put(c *gin.Context) {
