@@ -104,11 +104,11 @@ func put(c *gin.Context) {
 	}
 	if change {
 		update_sql := fmt.Sprintf(`UPDATE data_record SET %v, updated=1 WHERE uuid="%v"`, strings.Join(query, ", "), uuid)
-		insForm, err := db.Prepare(update_sql)
+		upForm, err := db.Prepare(update_sql)
 		if err != nil {
 			panic(err.Error())
 		}
-		_, err = insForm.Exec(values...)
+		_, err = upForm.Exec(values...)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -132,9 +132,15 @@ func delete(c *gin.Context) {
 			return
 		}
 	}
+	delete_sql := "UPDATE data_record SET deleted=1 WHERE uuid=?"
+	delForm, err := db.Prepare(delete_sql)
+	if err != nil {
+		panic(err.Error())
+	}
+	_, err = delForm.Exec(uuid)
+	if err != nil {
+		panic(err.Error())
+	}
 	// on success
 	c.JSON(204, nil)
-	return
-	// if uuid is not found
-	c.JSON(404, nil)
 }
