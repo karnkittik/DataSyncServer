@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"DataSyncServer/database"
@@ -59,14 +61,65 @@ func post(c *gin.Context) {
 
 func put(c *gin.Context) {
 	uuid := c.Param("uuid")
-	fmt.Println(uuid)
 	var putRequestBody entities.PutRequestBody
 	c.BindJSON(&putRequestBody)
+	db := database.Connect()
+	defer db.Close()
+	row := db.QueryRow("SELECT author,message,likes FROM data_record WHERE uuid=?", uuid)
+	var author, message string
+	var likes int
+	err := row.Scan(&author, &message, &likes)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// if uuid is not found
+			c.JSON(404, nil)
+			return
+		}
+	}
+	var query []string
+	var values []interface{}
+	tm := time.Now().UTC()
+	change := false
+	if author != putRequestBody.Author {
+		query = append(query, "author = ?")
+		query = append(query, "author_updated_at = ?")
+		values = append(values, putRequestBody.Author)
+		values = append(values, tm)
+		change = true
+	}
+	if message != putRequestBody.Message {
+		query = append(query, "message = ?")
+		query = append(query, "message_updated_at = ?")
+		values = append(values, putRequestBody.Message)
+		values = append(values, tm)
+		change = true
+
+	}
+	if likes != putRequestBody.Likes {
+		query = append(query, "likes = ?")
+		query = append(query, "likes_updated_at = ?")
+		values = append(values, putRequestBody.Likes)
+		values = append(values, tm)
+		change = true
+	}
+	if change {
+		update_sql := fmt.Sprintf(`UPDATE data_record SET %v, updated=1 WHERE uuid="%v"`, strings.Join(query, ", "), uuid)
+		insForm, err := db.Prepare(update_sql)
+		if err != nil {
+			panic(err.Error())
+		}
+		_, err = insForm.Exec(values...)
+		if err != nil {
+			e, _ := err.(*mysql.MySQLError)
+			// if uuid already exists
+			if e.Number == 1062 {
+				c.JSON(409, nil)
+				return
+			}
+		}
+	}
 	// on success
 	c.JSON(204, nil)
-	return
-	// if uuid is not found
-	c.JSON(404, nil)
 }
 
 func delete(c *gin.Context) {
