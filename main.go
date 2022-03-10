@@ -110,12 +110,7 @@ func put(c *gin.Context) {
 		}
 		_, err = insForm.Exec(values...)
 		if err != nil {
-			e, _ := err.(*mysql.MySQLError)
-			// if uuid already exists
-			if e.Number == 1062 {
-				c.JSON(409, nil)
-				return
-			}
+			panic(err.Error())
 		}
 	}
 	// on success
@@ -124,7 +119,19 @@ func put(c *gin.Context) {
 
 func delete(c *gin.Context) {
 	uuid := c.Param("uuid")
-	fmt.Println(uuid)
+	db := database.Connect()
+	defer db.Close()
+	row := db.QueryRow("SELECT author,message,likes FROM data_record WHERE uuid=?", uuid)
+	var author, message string
+	var likes int
+	err := row.Scan(&author, &message, &likes)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// if uuid is not found
+			c.JSON(404, nil)
+			return
+		}
+	}
 	// on success
 	c.JSON(204, nil)
 	return
