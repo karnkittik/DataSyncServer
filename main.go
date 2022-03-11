@@ -22,7 +22,7 @@ func main() {
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
 
-func select_create(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_create(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,author,message,likes FROM data_record WHERE created_at > ? AND deleted=0", tm)
 	if err != nil {
 		panic(err.Error())
@@ -36,9 +36,9 @@ func select_create(db *sql.DB, tm time.Time) []entities.ResponseData {
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_author(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_author(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,author FROM data_record WHERE author_updated_at > ? AND (message_updated_at <= ? OR message_updated_at IS NULL) AND (likes_updated_at <= ? OR likes_updated_at IS NULL) AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -52,9 +52,9 @@ func select_update_author(db *sql.DB, tm time.Time) []entities.ResponseData {
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_message(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_message(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,message FROM data_record WHERE message_updated_at > ? AND (author_updated_at <= ? OR author_updated_at IS NULL) AND (likes_updated_at <= ? OR likes_updated_at IS NULL) AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -68,9 +68,9 @@ func select_update_message(db *sql.DB, tm time.Time) []entities.ResponseData {
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_likes(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_likes(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,likes FROM data_record WHERE likes_updated_at > ? AND (author_updated_at <= ? OR author_updated_at IS NULL) AND (message_updated_at <= ? OR message_updated_at IS NULL) AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -84,9 +84,9 @@ func select_update_likes(db *sql.DB, tm time.Time) []entities.ResponseData {
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_author_message(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_author_message(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,author,message FROM data_record WHERE author_updated_at > ? AND message_updated_at > ? AND (likes_updated_at <= ? OR likes_updated_at IS NULL) AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -100,9 +100,9 @@ func select_update_author_message(db *sql.DB, tm time.Time) []entities.ResponseD
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_author_likes(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_author_likes(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,author,likes FROM data_record WHERE author_updated_at > ? AND likes_updated_at > ? AND (message_updated_at <= ? OR message_updated_at IS NULL) AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -116,9 +116,9 @@ func select_update_author_likes(db *sql.DB, tm time.Time) []entities.ResponseDat
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_message_likes(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_message_likes(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,message,likes FROM data_record WHERE message_updated_at > ? AND likes_updated_at > ? AND (author_updated_at <= ? OR author_updated_at IS NULL) AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -132,9 +132,9 @@ func select_update_message_likes(db *sql.DB, tm time.Time) []entities.ResponseDa
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-func select_update_auther_message_likes(db *sql.DB, tm time.Time) []entities.ResponseData {
+func select_update_auther_message_likes(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
 	selDB, err := db.Query("SELECT uuid,author,message,likes FROM data_record WHERE author_updated_at > ? AND message_updated_at > ? AND likes_updated_at > ? AND updated=1 AND deleted=0", tm, tm, tm)
 	if err != nil {
 		panic(err.Error())
@@ -148,10 +148,9 @@ func select_update_auther_message_likes(db *sql.DB, tm time.Time) []entities.Res
 		}
 		records = append(records, rec)
 	}
-	return records
+	ch <- records
 }
-
-func select_delete(db *sql.DB, tm time.Time) []string {
+func select_delete(db *sql.DB, tm time.Time, ch chan<- []string) {
 	selDB, err := db.Query("SELECT uuid FROM data_record WHERE created_at > ? AND deleted=1", tm)
 	if err != nil {
 		panic(err.Error())
@@ -165,7 +164,7 @@ func select_delete(db *sql.DB, tm time.Time) []string {
 		}
 		records = append(records, uuid)
 	}
-	return records
+	ch <- records
 }
 
 func get(c *gin.Context) {
@@ -173,31 +172,41 @@ func get(c *gin.Context) {
 	c.BindJSON(&requestDatetime)
 	db := database.Connect()
 	defer db.Close()
-	fmt.Println(requestDatetime.UnixTimestamp)
 	tm := time.Unix(int64(requestDatetime.UnixTimestamp), 0).UTC()
-	fmt.Println(tm)
-	create_list := select_create(db, tm)
-	delete_list := select_delete(db, tm)
-	update := []entities.ResponseData{}
+	start := time.Now()
 	// go routine
-	update_author_list := select_update_author(db, tm)
-	update_message_list := select_update_message(db, tm)
-	update_likes_list := select_update_likes(db, tm)
-	update_author_message_list := select_update_author_message(db, tm)
-	update_author_likes_list := select_update_author_likes(db, tm)
-	update_message_likes_list := select_update_message_likes(db, tm)
-	update_auther_message_likes_list := select_update_auther_message_likes(db, tm)
+	ch_create_data := make(chan []entities.ResponseData)
+	ch_delete_data := make(chan []string)
+	ch_update_author_list := make(chan []entities.ResponseData)
+	ch_update_message_list := make(chan []entities.ResponseData)
+	ch_update_likes_list := make(chan []entities.ResponseData)
+	ch_update_author_message_list := make(chan []entities.ResponseData)
+	ch_update_author_likes_list := make(chan []entities.ResponseData)
+	ch_update_message_likes_list := make(chan []entities.ResponseData)
+	ch_update_auther_message_likes_list := make(chan []entities.ResponseData)
+	go select_create(db, tm, ch_create_data)
+	go select_delete(db, tm, ch_delete_data)
+	go select_update_author(db, tm, ch_update_author_list)
+	go select_update_message(db, tm, ch_update_message_list)
+	go select_update_likes(db, tm, ch_update_likes_list)
+	go select_update_author_message(db, tm, ch_update_author_message_list)
+	go select_update_author_likes(db, tm, ch_update_author_likes_list)
+	go select_update_message_likes(db, tm, ch_update_message_likes_list)
+	go select_update_auther_message_likes(db, tm, ch_update_auther_message_likes_list)
+	elapsed := time.Since(start)
+	fmt.Println("Elapsed time:", elapsed)
 	// combine data
-	update = append(update, update_author_list...)
-	update = append(update, update_message_list...)
-	update = append(update, update_likes_list...)
-	update = append(update, update_author_message_list...)
-	update = append(update, update_author_likes_list...)
-	update = append(update, update_message_likes_list...)
-	update = append(update, update_auther_message_likes_list...)
+	update := []entities.ResponseData{}
+	update = append(update, <-ch_update_author_list...)
+	update = append(update, <-ch_update_message_list...)
+	update = append(update, <-ch_update_likes_list...)
+	update = append(update, <-ch_update_author_message_list...)
+	update = append(update, <-ch_update_author_likes_list...)
+	update = append(update, <-ch_update_message_likes_list...)
+	update = append(update, <-ch_update_auther_message_likes_list...)
 	m := map[string]interface{}{
-		"create": create_list,
-		"delete": delete_list,
+		"create": <-ch_create_data,
+		"delete": <-ch_delete_data,
 		"update": update,
 	}
 	c.JSON(200, m)
