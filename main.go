@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.GET("/api/messages", get)
+	r.GET("/api/messages/unixtimestamp", get)
 	r.POST("/api/messages", post)
 	r.PUT("/api/messages/:uuid", put)
 	r.DELETE("/api/messages/:uuid", delete)
@@ -168,11 +169,15 @@ func select_delete(db *sql.DB, tm time.Time, ch chan<- []string) {
 }
 
 func get(c *gin.Context) {
-	var requestDatetime entities.GetRequestBody
-	c.BindJSON(&requestDatetime)
+	unixtimestamp := c.Param("unixtimestamp")
+	unixtimestamp_int, err := strconv.Atoi(unixtimestamp)
+	if err != nil {
+		c.JSON(400, nil)
+		return
+	}
 	db := database.Connect()
 	defer db.Close()
-	tm := time.Unix(int64(requestDatetime.UnixTimestamp), 0).UTC()
+	tm := time.Unix(int64(unixtimestamp_int), 0).UTC()
 	start := time.Now()
 	// go routine
 	ch_create_data := make(chan []entities.ResponseData)
