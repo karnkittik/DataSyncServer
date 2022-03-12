@@ -11,6 +11,7 @@ type DataRecord struct {
 	MessageUpdatedAt *time.Time
 	LikesUpdatedAt   *time.Time
 	CreatedAt        time.Time
+	DeletedAt        time.Time
 	UpdatedAt        bool
-	DeletedAt        bool
+	Deleted          bool
 }

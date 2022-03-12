@@ -16,7 +16,7 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.GET("/api/messages/unixtimestamp", get)
+	r.GET("/api/messages/:unixtimestamp", get)
 	r.POST("/api/messages", post)
 	r.PUT("/api/messages/:uuid", put)
 	r.DELETE("/api/messages/:uuid", delete)
@@ -152,7 +152,7 @@ func select_update_auther_message_likes(db *sql.DB, tm time.Time, ch chan<- []en
 	ch <- records
 }
 func select_delete(db *sql.DB, tm time.Time, ch chan<- []string) {
-	selDB, err := db.Query("SELECT uuid FROM data_record WHERE created_at > ? AND deleted=1", tm)
+	selDB, err := db.Query("SELECT uuid FROM data_record WHERE deleted_at > ? AND deleted=1", tm)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -319,12 +319,12 @@ func delete(c *gin.Context) {
 			return
 		}
 	}
-	delete_sql := "UPDATE data_record SET deleted=1 WHERE uuid=?"
-	delForm, err := db.Prepare(delete_sql)
+	tm := time.Now().UTC()
+	delForm, err := db.Prepare("UPDATE data_record SET deleted_at=?, deleted=1 WHERE uuid=?")
 	if err != nil {
 		panic(err.Error())
 	}
-	_, err = delForm.Exec(uuid)
+	_, err = delForm.Exec(tm, uuid)
 	if err != nil {
 		panic(err.Error())
 	}
