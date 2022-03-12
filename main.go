@@ -20,6 +20,7 @@ func main() {
 	r.POST("/api/messages", post)
 	r.PUT("/api/messages/:uuid", put)
 	r.DELETE("/api/messages/:uuid", delete)
+	r.GET("/api/messages/all-no-delete", get_all_no_delete)
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
 
@@ -167,6 +168,32 @@ func select_delete(db *sql.DB, tm time.Time, ch chan<- []string) {
 		records = append(records, uuid)
 	}
 	ch <- records
+}
+func select_all_no_delete(db *sql.DB, ch chan<- [][]interface{}) {
+	selDB, err := db.Query("SELECT uuid,author,message,likes FROM data_record WHERE deleted=0")
+	if err != nil {
+		panic(err.Error())
+	}
+	records := [][]interface{}{}
+	for selDB.Next() {
+		var uuid, author, message string
+		var likes int
+		err = selDB.Scan(&uuid, &author, &message, &likes)
+		if err != nil {
+			panic(err.Error())
+		}
+		records = append(records, []interface{}{uuid, author, message, likes})
+	}
+	ch <- records
+
+}
+
+func get_all_no_delete(c *gin.Context) {
+	db := database.Connect()
+	defer db.Close()
+	ch_get_all_no_delete := make(chan [][]interface{})
+	go select_all_no_delete(db, ch_get_all_no_delete)
+	c.JSON(200, map[string]interface{}{"d": <-ch_get_all_no_delete})
 }
 
 func get(c *gin.Context) {
