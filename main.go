@@ -23,19 +23,20 @@ func main() {
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
 
-func select_create(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
+func select_create(db *sql.DB, tm time.Time, ch chan<- [][]interface{}) {
 	selDB, err := db.Query("SELECT uuid,author,message,likes FROM data_record WHERE created_at > ? AND deleted=0", tm)
 	if err != nil {
 		panic(err.Error())
 	}
-	records := []entities.ResponseData{}
+	records := [][]interface{}{}
 	for selDB.Next() {
-		var rec entities.ResponseData
-		err = selDB.Scan(&rec.UUID, &rec.Author, &rec.Message, &rec.Likes)
+		var uuid, author, message string
+		var likes int
+		err = selDB.Scan(&uuid, &author, &message, &likes)
 		if err != nil {
 			panic(err.Error())
 		}
-		records = append(records, rec)
+		records = append(records, []interface{}{uuid, author, message, likes})
 	}
 	ch <- records
 }
@@ -156,7 +157,7 @@ func select_delete(db *sql.DB, tm time.Time, ch chan<- []string) {
 	if err != nil {
 		panic(err.Error())
 	}
-	var records []string
+	records := []string{}
 	for selDB.Next() {
 		var uuid string
 		err = selDB.Scan(&uuid)
@@ -178,9 +179,9 @@ func get(c *gin.Context) {
 	db := database.Connect()
 	defer db.Close()
 	tm := time.Unix(int64(unixtimestamp_int), 0).UTC()
-	start := time.Now()
+	// start := time.Now()
 	// go routine
-	ch_create_data := make(chan []entities.ResponseData)
+	ch_create_data := make(chan [][]interface{})
 	ch_delete_data := make(chan []string)
 	ch_update_author_list := make(chan []entities.ResponseData)
 	ch_update_message_list := make(chan []entities.ResponseData)
@@ -198,8 +199,8 @@ func get(c *gin.Context) {
 	go select_update_author_likes(db, tm, ch_update_author_likes_list)
 	go select_update_message_likes(db, tm, ch_update_message_likes_list)
 	go select_update_auther_message_likes(db, tm, ch_update_auther_message_likes_list)
-	elapsed := time.Since(start)
-	fmt.Println("Elapsed time:", elapsed)
+	// elapsed := time.Since(start)
+	// fmt.Println("Elapsed time:", elapsed)
 	// combine data
 	update := []entities.ResponseData{}
 	update = append(update, <-ch_update_author_list...)
@@ -210,9 +211,9 @@ func get(c *gin.Context) {
 	update = append(update, <-ch_update_message_likes_list...)
 	update = append(update, <-ch_update_auther_message_likes_list...)
 	m := map[string]interface{}{
-		"create": <-ch_create_data,
-		"delete": <-ch_delete_data,
-		"update": update,
+		"c": <-ch_create_data,
+		"d": <-ch_delete_data,
+		"u": update,
 	}
 	c.JSON(200, m)
 }
