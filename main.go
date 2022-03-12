@@ -16,7 +16,7 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.GET("/api/messages/unixtimestamp", get)
+	r.GET("/api/messages/:unixtimestamp", get)
 	r.POST("/api/messages", post)
 	r.PUT("/api/messages/:uuid", put)
 	r.DELETE("/api/messages/:uuid", delete)
