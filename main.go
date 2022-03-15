@@ -185,7 +185,6 @@ func select_all_no_delete(db *sql.DB, ch chan<- [][]interface{}) {
 		records = append(records, []interface{}{uuid, author, message, likes})
 	}
 	ch <- records
-
 }
 
 func get_all_no_delete(c *gin.Context) {
@@ -206,7 +205,6 @@ func get(c *gin.Context) {
 	db := database.Connect()
 	defer db.Close()
 	tm := time.Unix(int64(unixtimestamp_int), 0).UTC()
-	// start := time.Now()
 	// go routine
 	ch_create_data := make(chan [][]interface{})
 	ch_delete_data := make(chan []string)
@@ -217,6 +215,7 @@ func get(c *gin.Context) {
 	ch_update_author_likes_list := make(chan []entities.ResponseData)
 	ch_update_message_likes_list := make(chan []entities.ResponseData)
 	ch_update_auther_message_likes_list := make(chan []entities.ResponseData)
+	// start := time.Now()
 	go select_create(db, tm, ch_create_data)
 	go select_delete(db, tm, ch_delete_data)
 	go select_update_author(db, tm, ch_update_author_list)
@@ -226,8 +225,6 @@ func get(c *gin.Context) {
 	go select_update_author_likes(db, tm, ch_update_author_likes_list)
 	go select_update_message_likes(db, tm, ch_update_message_likes_list)
 	go select_update_auther_message_likes(db, tm, ch_update_auther_message_likes_list)
-	// elapsed := time.Since(start)
-	// fmt.Println("Elapsed time:", elapsed)
 	// combine data
 	update := []entities.ResponseData{}
 	update = append(update, <-ch_update_author_list...)
@@ -242,6 +239,8 @@ func get(c *gin.Context) {
 		"d": <-ch_delete_data,
 		"u": update,
 	}
+	// elapsed := time.Since(start)
+	// fmt.Println("Elapsed time:", elapsed)
 	c.JSON(200, m)
 }
 
