@@ -7,7 +7,7 @@ import (
 )
 
 func Connect() *sql.DB {
-	db, err := sql.Open("mysql", "root:my-secret-pw@/mydb")
+	db, err := sql.Open("mysql", "root:my-secret-pw@/mydb?parseTime=true")
 	if err != nil {
 		panic(err)
 	}
