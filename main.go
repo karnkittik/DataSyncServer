@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,8 @@ import (
 
 func main() {
 	r := gin.Default()
-	r.GET("/api/messages/:unixtimestamp", get)
+	r.GET("/api/messages/create/:unixtimestamp/:offset", get_create)
+	r.GET("/api/messages/update-delete/:unixtimestamp", get_update_delete)
 	r.POST("/api/messages", post)
 	r.PUT("/api/messages/:uuid", put)
 	r.DELETE("/api/messages/:uuid", delete)
@@ -24,8 +26,9 @@ func main() {
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
 
-func select_create(db *sql.DB, tm time.Time, ch chan<- [][]interface{}) {
-	selDB, err := db.Query("SELECT uuid,author,message,likes FROM data_record WHERE created_at > ? AND deleted=0", tm)
+func select_create(db *sql.DB, tm time.Time, offset int, ch chan<- [][]interface{}) {
+	limit := 100000
+	selDB, err := db.Query("SELECT uuid,author,message,likes FROM data_record WHERE created_at > ? AND deleted=0 LIMIT ? OFFSET ?", tm, limit, limit*offset)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -39,6 +42,7 @@ func select_create(db *sql.DB, tm time.Time, ch chan<- [][]interface{}) {
 		}
 		records = append(records, []interface{}{uuid, author, message, likes})
 	}
+	fmt.Println(len(records))
 	ch <- records
 }
 func select_update_author(db *sql.DB, tm time.Time, ch chan<- []entities.ResponseData) {
@@ -195,7 +199,7 @@ func get_all_no_delete(c *gin.Context) {
 	c.JSON(200, map[string]interface{}{"d": <-ch_get_all_no_delete})
 }
 
-func get(c *gin.Context) {
+func get_update_delete(c *gin.Context) {
 	unixtimestamp := c.Param("unixtimestamp")
 	unixtimestamp_int, err := strconv.Atoi(unixtimestamp)
 	if err != nil {
@@ -206,7 +210,6 @@ func get(c *gin.Context) {
 	defer db.Close()
 	tm := time.Unix(int64(unixtimestamp_int), 0).UTC()
 	// go routine
-	ch_create_data := make(chan [][]interface{})
 	ch_delete_data := make(chan []string)
 	ch_update_author_list := make(chan []entities.ResponseData)
 	ch_update_message_list := make(chan []entities.ResponseData)
@@ -216,7 +219,6 @@ func get(c *gin.Context) {
 	ch_update_message_likes_list := make(chan []entities.ResponseData)
 	ch_update_auther_message_likes_list := make(chan []entities.ResponseData)
 	// start := time.Now()
-	go select_create(db, tm, ch_create_data)
 	go select_delete(db, tm, ch_delete_data)
 	go select_update_author(db, tm, ch_update_author_list)
 	go select_update_message(db, tm, ch_update_message_list)
@@ -235,9 +237,36 @@ func get(c *gin.Context) {
 	update = append(update, <-ch_update_message_likes_list...)
 	update = append(update, <-ch_update_auther_message_likes_list...)
 	m := map[string]interface{}{
-		"c": <-ch_create_data,
 		"d": <-ch_delete_data,
 		"u": update,
+	}
+	// elapsed := time.Since(start)
+	// fmt.Println("Elapsed time:", elapsed)
+	c.JSON(200, m)
+}
+
+func get_create(c *gin.Context) {
+	unixtimestamp := c.Param("unixtimestamp")
+	offset := c.Param("offset")
+	unixtimestamp_int, err := strconv.Atoi(unixtimestamp)
+	if err != nil {
+		c.JSON(400, nil)
+		return
+	}
+	offset_int, err := strconv.Atoi(offset)
+	if err != nil {
+		c.JSON(400, nil)
+		return
+	}
+	db := database.Connect()
+	defer db.Close()
+	tm := time.Unix(int64(unixtimestamp_int), 0).UTC()
+	// go routine
+	ch_create_data := make(chan [][]interface{})
+	// start := time.Now()
+	go select_create(db, tm, offset_int, ch_create_data)
+	m := map[string]interface{}{
+		"c": <-ch_create_data,
 	}
 	// elapsed := time.Since(start)
 	// fmt.Println("Elapsed time:", elapsed)
@@ -357,4 +386,17 @@ func delete(c *gin.Context) {
 	}
 	// on success
 	c.JSON(204, nil)
+}
+
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
 }
