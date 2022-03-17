@@ -13,10 +13,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
+	"github.com/nanmu42/gzip"
 )
 
 func main() {
+	handler := gzip.NewHandler(gzip.Config{
+    		// gzip compression level to use
+		CompressionLevel: 1, 
+    		// minimum content length to trigger gzip, the unit is in byte.
+		MinContentLength: 2097152,
+		})
 	r := gin.Default()
+	r.Use(handler.Gin)
 	r.GET("/api/messages/create/:unixtimestamp/:uuid", get_create)
 	r.GET("/api/messages/update-delete/:unixtimestamp", get_update_delete)
 	r.POST("/api/messages", post)
